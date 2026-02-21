@@ -1,1 +1,0 @@
-# project-vital-client
