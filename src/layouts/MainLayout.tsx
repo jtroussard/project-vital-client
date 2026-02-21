@@ -15,7 +15,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                 </div>
             </main>
             <footer className="p-6 text-center text-gray-400 text-xs uppercase tracking-widest border-t border-gray-200 bg-white">
-                &copy; {new Date().getFullYear()} Project Vital - Invest in Yourself
+                &copy; {new Date().getFullYear()} | Project Vital - Invest in Yourself | A DevLife4Me Project | Made with ❤️ in Pittsburgh
             </footer>
         </div>
     );
