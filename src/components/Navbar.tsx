@@ -3,16 +3,59 @@ import { Button } from 'primereact/button';
 import { useAuthStore } from '../store/useAuthStore';
 import { LoginModal } from './LoginModal';
 import { supabase } from '../services/supabaseClient';
-import { Menu, Activity } from 'lucide-react';
+import { Menu as LucideMenu, Activity } from 'lucide-react';
+import { Menu } from 'primereact/menu';
+import { MenuItem } from 'primereact/menuitem';
+import { useNavigate } from 'react-router-dom';
 
 export const Navbar: React.FC = () => {
     const { isAuthenticated, user, clearSession } = useAuthStore();
+    const menu = React.useRef<Menu>(null);
+    const navigate = useNavigate();
     const [loginVisible, setLoginVisible] = useState(false);
 
     const handleLogout = async () => {
         await supabase.auth.signOut();
         clearSession();
+        navigate('/');
     };
+
+    const menuItems: MenuItem[] = [
+        {
+            label: 'Navigation',
+            items: [
+                {
+                    label: 'Dashboard',
+                    icon: 'pi pi-home',
+                    command: () => navigate('/home')
+                },
+                {
+                    label: 'User Profile',
+                    icon: 'pi pi-user',
+                    command: () => navigate('/profile')
+                },
+                {
+                    label: 'Health Journal',
+                    icon: 'pi pi-book',
+                    command: () => navigate('/journal')
+                }
+            ]
+        },
+        {
+            separator: true
+        },
+        {
+            label: 'Account',
+            items: [
+                {
+                    label: 'Logout',
+                    icon: 'pi pi-sign-out',
+                    className: 'text-danger',
+                    command: handleLogout
+                }
+            ]
+        }
+    ];
 
     return (
         <nav className="w-full bg-white shadow-1 px-4 py-3 flex align-items-center justify-content-between sticky top-0 z-5">
@@ -24,10 +67,14 @@ export const Navbar: React.FC = () => {
                     </div>
                     <span className="font-bold text-900 hidden sm:block">VITAL</span>
                 </div>
+                <Menu model={menuItems} popup ref={menu} id="hamburger_menu" />
                 <Button
-                    icon={<Menu size={20} />}
+                    icon={<LucideMenu size={20} />}
                     tooltip="Menu"
                     className="p-button-text p-button-plain p-button-sm ml-1"
+                    onClick={(e) => menu.current?.toggle(e)}
+                    aria-controls="hamburger_menu"
+                    aria-haspopup
                 />
             </div>
 

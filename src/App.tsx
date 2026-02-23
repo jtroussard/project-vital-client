@@ -5,6 +5,8 @@ import { supabase } from './services/supabaseClient';
 import { MainLayout } from './layouts/MainLayout';
 import { LandingPage } from './pages/LandingPage';
 import { HomePage } from './pages/HomePage';
+import { ProfilePage } from './pages/ProfilePage';
+import { JournalPage } from './pages/JournalPage';
 import { ProgressSpinner } from 'primereact/progressspinner';
 
 const App: React.FC = () => {
@@ -43,6 +45,14 @@ const App: React.FC = () => {
                     <Route
                         path="/home"
                         element={isAuthenticated ? <HomePage /> : <Navigate to="/" />}
+                    />
+                    <Route
+                        path="/profile"
+                        element={isAuthenticated ? <ProfilePage /> : <Navigate to="/" />}
+                    />
+                    <Route
+                        path="/journal"
+                        element={isAuthenticated ? <JournalPage /> : <Navigate to="/" />}
                     />
                     {/* Catch-all */}
                     <Route path="*" element={<Navigate to="/" />} />
