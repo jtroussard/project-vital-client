@@ -5,54 +5,208 @@ import { InputTextarea } from 'primereact/inputtextarea';
 import { Button } from 'primereact/button';
 import { Calendar } from 'primereact/calendar';
 import { Card } from 'primereact/card';
-import { JournalEntryType, Metric, JournalEntry, MeasurementType } from '../types';
+import { JournalEntryType, Metric, JournalEntryResponse, MeasurementType, JournalBatch } from '../types';
 import { metricService } from '../services/metricService';
+import { journalService } from '../services/journalService';
+import { useSettingsStore } from '../store/useSettingsStore';
+import { getUnitLabel } from '../utils/unitUtils';
+
+// Interal Types
+interface FormMetric {
+    id: string;
+    selectedType: MeasurementType | null;
+    metrics: Metric[];
+    selectedMetric: Metric | null;
+    value: number | null;
+}
+
+interface MetricEntryRowProps {
+    index: number;
+    metricRow: FormMetric;
+    measurementTypes: MeasurementType[];
+    allMetrics: Metric[];
+    usedMetricIds: number[];
+    fetchingData: boolean;
+    settings: any;
+    onUpdate: (field: keyof FormMetric, value: any) => void;
+    onRemove?: () => void;
+}
+
+const MetricEntryRow: React.FC<MetricEntryRowProps> = ({
+    index,
+    metricRow,
+    measurementTypes,
+    allMetrics,
+    usedMetricIds,
+    fetchingData,
+    settings,
+    onUpdate,
+    onRemove
+}) => {
+    return (
+        <div className="p-4 border-1 border-300 border-round-xl bg-gray-50 flex flex-column gap-3">
+            <div className="flex justify-content-between align-items-center" style={{ minHeight: '2.5rem' }}>
+                <span className="text-sm font-bold text-600 uppercase tracking-wider">
+                    Metric #{index + 1}
+                </span>
+                {onRemove && (
+                    <Button
+                        icon="pi pi-trash"
+                        className="p-button-rounded p-button-danger p-button-text p-button-sm"
+                        onClick={onRemove}
+                        tooltip="Remove this metric"
+                    />
+                )}
+            </div>
+
+            <div className="grid">
+                <div className="col-12 md:col-6 field flex flex-column gap-2 p-1">
+                    <label className="text-sm font-bold text-700">Category</label>
+                    <Dropdown
+                        value={metricRow.selectedType}
+                        options={measurementTypes.filter(type => {
+                            const isCurrentType = type.id === metricRow.selectedType?.id;
+                            const hasAvailableMetrics = allMetrics.some(m =>
+                                m.measurementType?.id === type.id && !usedMetricIds.includes(m.id)
+                            );
+                            return isCurrentType || hasAvailableMetrics;
+                        })}
+                        optionLabel="name"
+                        onChange={(e) => onUpdate('selectedType', e.value)}
+                        placeholder="Select Category"
+                        loading={fetchingData}
+                        className="w-full"
+                    />
+                </div>
+                <div className="col-12 md:col-6 field flex flex-column gap-2 p-1">
+                    <label className="text-sm font-bold text-700">Specific Metric</label>
+                    <Dropdown
+                        value={metricRow.selectedMetric}
+                        options={metricRow.metrics.filter(m =>
+                            m.id === metricRow.selectedMetric?.id || !usedMetricIds.includes(m.id)
+                        )}
+                        optionLabel="name"
+                        onChange={(e) => onUpdate('selectedMetric', e.value)}
+                        placeholder="Select Metric"
+                        className="w-full"
+                        disabled={!metricRow.selectedType}
+                    />
+                </div>
+                {metricRow.selectedMetric && (
+                    <div className="col-12 field flex flex-column gap-2 p-1 mt-2">
+                        <label className="text-sm font-bold text-700">Value ({getUnitLabel(metricRow.selectedMetric, settings?.preferredUnitSystem)})</label>
+                        <InputNumber
+                            value={metricRow.value}
+                            onValueChange={(e) => onUpdate('value', e.value)}
+                            mode="decimal"
+                            minFractionDigits={0}
+                            maxFractionDigits={2}
+                            className="w-full"
+                        />
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
 
 interface JournalFormProps {
-    onSuccess: (entry: JournalEntry) => void;
+    onSuccess: (entry: JournalEntryResponse) => void;
 }
 
 export const JournalForm: React.FC<JournalFormProps> = ({ onSuccess }) => {
+    const { settings } = useSettingsStore();
     const [entryType, setEntryType] = useState<JournalEntryType>(JournalEntryType.METRIC);
     const [entryDate, setEntryDate] = useState<Date>(new Date());
-
-    // Cascading selection
-    const [measurementTypes, setMeasurementTypes] = useState<MeasurementType[]>([]);
-    const [selectedMeasurementType, setSelectedMeasurementType] = useState<MeasurementType | null>(null);
-    const [metrics, setMetrics] = useState<Metric[]>([]);
-    const [selectedMetric, setSelectedMetric] = useState<Metric | null>(null);
-
-    const [value, setValue] = useState<number | null>(null);
-    const [notes, setNotes] = useState<string>('');
+    const [generalNotes, setGeneralNotes] = useState<string>('');
     const [loading, setLoading] = useState(false);
-    const [fetchingCategories, setFetchingCategories] = useState(false);
-    const [fetchingMetrics, setFetchingMetrics] = useState(false);
 
-    // Initial load of categories
+    // Multi-metric state
+    const [formMetrics, setFormMetrics] = useState<FormMetric[]>([{
+        id: Math.random().toString(36).substr(2, 9),
+        selectedType: null,
+        metrics: [],
+        selectedMetric: null,
+        value: null
+    }]);
+
+    const [measurementTypes, setMeasurementTypes] = useState<MeasurementType[]>([]);
+    const [allMetrics, setAllMetrics] = useState<Metric[]>([]);
+    const [fetchingData, setFetchingData] = useState(false);
+
+    // Initial load: Fetch everything once for smarter filtering
     useEffect(() => {
+        const loadInitialData = async () => {
+            setFetchingData(true);
+            try {
+                const [types, metrics] = await Promise.all([
+                    metricService.getMeasurementTypes(),
+                    metricService.getMetrics()
+                ]);
+                setMeasurementTypes(types);
+                setAllMetrics(metrics);
+            } catch (err) {
+                console.error('Failed to fetch initial form data', err);
+            } finally {
+                setFetchingData(false);
+            }
+        };
+
         if (entryType === JournalEntryType.METRIC) {
-            setFetchingCategories(true);
-            metricService.getMeasurementTypes()
-                .then(setMeasurementTypes)
-                .catch(err => console.error('Failed to fetch categories', err))
-                .finally(() => setFetchingCategories(false));
+            loadInitialData();
         }
     }, [entryType]);
 
-    // Load metrics when category changes
-    useEffect(() => {
-        if (selectedMeasurementType) {
-            setFetchingMetrics(true);
-            metricService.getMetricsByType(selectedMeasurementType.id)
-                .then(setMetrics)
-                .catch(err => console.error('Failed to fetch metrics', err))
-                .finally(() => setFetchingMetrics(false));
-            setSelectedMetric(null); // Reset child selection
-        } else {
-            setMetrics([]);
-            setSelectedMetric(null);
+    // Determine which metrics are available for a given row
+    const getMetricsForCategory = (typeId: number) => {
+        return allMetrics.filter(m => m.measurementType?.id === typeId);
+    };
+
+    const addMetricField = () => {
+        setFormMetrics(prev => [...prev, {
+            id: Math.random().toString(36).substr(2, 9),
+            selectedType: null,
+            metrics: [],
+            selectedMetric: null,
+            value: null
+        }]);
+    };
+
+    const removeMetricField = (id: string) => {
+        if (formMetrics.length > 1) {
+            setFormMetrics(prev => prev.filter(m => m.id !== id));
         }
-    }, [selectedMeasurementType]);
+    };
+
+    const updateMetricField = (index: number, field: keyof FormMetric, value: any) => {
+        setFormMetrics(prev => {
+            const updated = [...prev];
+            updated[index] = { ...updated[index], [field]: value };
+
+            if (field === 'selectedType') {
+                updated[index].selectedMetric = null;
+                updated[index].value = null;
+                const categoryMetrics = value ? getMetricsForCategory(value.id) : [];
+                updated[index].metrics = categoryMetrics;
+
+                // Auto-select if only one metric is available in this category
+                // (Considering metrics already used in other rows)
+                if (value) {
+                    const currentUsedIds = updated
+                        .filter((_, i) => i !== index)
+                        .map(m => m.selectedMetric?.id)
+                        .filter((id): id is number => id !== undefined);
+
+                    const availableMetrics = categoryMetrics.filter(m => !currentUsedIds.includes(m.id));
+                    if (availableMetrics.length === 1) {
+                        console.log(`Auto-selecting metric: ${availableMetrics[0].name}`);
+                        updated[index].selectedMetric = availableMetrics[0];
+                    }
+                }
+            }
+            return updated;
+        });
+    };
 
     const entryTypeOptions = [
         { label: 'Metric', value: JournalEntryType.METRIC },
@@ -61,32 +215,51 @@ export const JournalForm: React.FC<JournalFormProps> = ({ onSuccess }) => {
     ];
 
     const handleSubmit = async () => {
+        const validMetrics = formMetrics.filter(m => m.selectedMetric && m.value !== null);
+        if (entryType === JournalEntryType.METRIC && validMetrics.length === 0) return;
+
         setLoading(true);
         try {
-            onSuccess({
-                id: Math.random(), // Temporary
-                entryType,
+            const batchPayload = {
                 entryDate: entryDate.toISOString(),
-                value: value || undefined,
-                notes: notes || undefined,
-                metric: selectedMetric || undefined,
-                isActive: true,
-                userId: ''
-            } as JournalEntry);
+                notes: generalNotes || undefined,
+                entries: validMetrics.map(m => ({
+                    metricId: m.selectedMetric!.id,
+                    value: m.value!,
+                    unit: getUnitLabel(m.selectedMetric!, settings?.preferredUnitSystem),
+                    notes: '' // Individual notes per metric could be added later
+                }))
+            };
+
+            const newBatch = await journalService.createBatch(batchPayload);
+            // newBatch.entries[0] just to satisfy the legacy onSuccess return type for now
+            // We will need to update JournalPage to handle Batches
+            onSuccess(newBatch.entries[0]);
 
             // Reset form fields
-            setValue(null);
-            setNotes('');
+            setFormMetrics([{
+                id: Math.random().toString(36).substr(2, 9),
+                selectedType: null,
+                metrics: [],
+                selectedMetric: null,
+                value: null
+            }]);
+            setGeneralNotes('');
         } catch (error) {
-            console.error('Failed to create entry', error);
+            console.error('Failed to create entry batch', error);
         } finally {
             setLoading(false);
         }
     };
 
+    // Calculate used IDs outside render for clarity and reuse
+    const usedMetricIds = formMetrics
+        .map(m => m.selectedMetric?.id)
+        .filter((id): id is number => id !== undefined);
+
     return (
-        <Card title="Add New Entry" className="shadow-2 border-round-xl mb-4">
-            <div className="flex flex-column gap-4">
+        <Card title="Add New Entry" className="shadow-2 border-round-xl mb-4 p-card-tight">
+            <div className="flex flex-column gap-3">
                 <div className="field flex flex-column gap-2">
                     <label className="font-bold">Entry Type</label>
                     <Dropdown
@@ -110,69 +283,49 @@ export const JournalForm: React.FC<JournalFormProps> = ({ onSuccess }) => {
                 </div>
 
                 {entryType === JournalEntryType.METRIC && (
-                    <>
-                        <div className="field flex flex-column gap-2">
-                            <label className="font-bold">Measurement Category</label>
-                            <Dropdown
-                                value={selectedMeasurementType}
-                                options={measurementTypes}
-                                optionLabel="name"
-                                loading={fetchingCategories}
-                                onChange={(e) => setSelectedMeasurementType(e.value)}
-                                placeholder="Select a Category (e.g. Weight)"
-                                className="w-full"
+                    <div className="flex flex-column gap-4">
+                        {formMetrics.map((metricRow, index) => (
+                            <MetricEntryRow
+                                key={metricRow.id}
+                                index={index}
+                                metricRow={metricRow}
+                                measurementTypes={measurementTypes}
+                                allMetrics={allMetrics}
+                                usedMetricIds={usedMetricIds}
+                                fetchingData={fetchingData}
+                                settings={settings}
+                                onUpdate={(field, value) => updateMetricField(index, field, value)}
+                                onRemove={index > 0 ? () => removeMetricField(metricRow.id) : undefined}
                             />
-                        </div>
+                        ))}
 
-                        {selectedMeasurementType && (
-                            <div className="field flex flex-column gap-2">
-                                <label className="font-bold">Specific Metric</label>
-                                <Dropdown
-                                    value={selectedMetric}
-                                    options={metrics}
-                                    optionLabel="name"
-                                    loading={fetchingMetrics}
-                                    onChange={(e) => setSelectedMetric(e.value)}
-                                    placeholder="Select a Metric (e.g. Blood Ketone)"
-                                    className="w-full"
-                                    disabled={!selectedMeasurementType}
-                                />
-                            </div>
-                        )}
-
-                        {selectedMetric && (
-                            <div className="field flex flex-column gap-2">
-                                <label className="font-bold">Value ({selectedMetric.baseUnit})</label>
-                                <InputNumber
-                                    value={value}
-                                    onValueChange={(e) => setValue(e.value as number | null)}
-                                    mode="decimal"
-                                    minFractionDigits={0}
-                                    maxFractionDigits={2}
-                                    className="w-full"
-                                />
-                            </div>
-                        )}
-                    </>
+                        <Button
+                            label="Add Metric"
+                            icon="pi pi-plus"
+                            className="p-button-outlined p-button-secondary w-full border-round-xl"
+                            onClick={addMetricField}
+                        />
+                    </div>
                 )}
 
                 <div className="field flex flex-column gap-2">
                     <label className="font-bold">Notes</label>
                     <InputTextarea
-                        value={notes}
-                        onChange={(e) => setNotes(e.target.value)}
+                        value={generalNotes}
+                        onChange={(e) => setGeneralNotes(e.target.value)}
                         rows={3}
                         autoResize
                         className="w-full"
+                        placeholder="Add any notes about this entry here..."
                     />
                 </div>
 
                 <div className="flex justify-content-end mt-2">
                     <Button
-                        label="Save Entry"
+                        label="Save Journal Entry"
                         icon={loading ? "pi pi-spin pi-spinner" : "pi pi-check"}
                         onClick={handleSubmit}
-                        disabled={loading || (entryType === JournalEntryType.METRIC && (!selectedMetric || value === null))}
+                        disabled={loading || (entryType === JournalEntryType.METRIC && !formMetrics.every(m => m.selectedMetric && m.value !== null))}
                         className="p-button-primary border-round-xl px-4"
                     />
                 </div>

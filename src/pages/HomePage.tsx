@@ -5,12 +5,12 @@ import { Calendar, FileText, Target, Plus, List } from 'lucide-react';
 import { Button } from 'primereact/button';
 import { profileService } from '../services/profileService';
 import { journalService } from '../services/journalService';
-import { UserProfile, JournalEntry } from '../types';
+import { UserProfile, JournalEntryResponse } from '../types';
 
 export const HomePage: React.FC = () => {
     const { user } = useAuthStore();
     const [profile, setProfile] = useState<UserProfile | null>(null);
-    const [entries, setEntries] = useState<JournalEntry[]>([]);
+    const [entries, setEntries] = useState<JournalEntryResponse[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {

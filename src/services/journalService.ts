@@ -1,24 +1,50 @@
 import apiClient from './apiClient';
-import { JournalEntry } from '../types';
+import { JournalEntryResponse, JournalEntryType, JournalBatch, Page } from '../types';
 
 export const journalService = {
-    getEntries: async (): Promise<JournalEntry[]> => {
-        const response = await apiClient.get<JournalEntry[]>('/api/journal');
+    getEntries: async (): Promise<JournalEntryResponse[]> => {
+        const response = await apiClient.get<JournalEntryResponse[]>('/api/journal');
         return response.data;
     },
 
-    getEntry: async (id: number): Promise<JournalEntry> => {
-        const response = await apiClient.get<JournalEntry>(`/api/journal/${id}`);
+    getEntry: async (id: number): Promise<JournalEntryResponse> => {
+        const response = await apiClient.get<JournalEntryResponse>(`/api/journal/${id}`);
         return response.data;
     },
 
-    createEntry: async (entry: Partial<JournalEntry>): Promise<JournalEntry> => {
-        const response = await apiClient.post<JournalEntry>('/api/journal', entry);
+    getBatches: async (page: number = 0, size: number = 10): Promise<Page<JournalBatch>> => {
+        const response = await apiClient.get<Page<JournalBatch>>(`/api/journal/batches?page=${page}&size=${size}`);
         return response.data;
     },
 
-    batchCreateEntries: async (entries: Partial<JournalEntry>[]): Promise<JournalEntry[]> => {
-        const response = await apiClient.post<JournalEntry[]>('/api/journal/batch', entries);
+    getBatch: async (id: number): Promise<JournalBatch> => {
+        const response = await apiClient.get<JournalBatch>(`/api/journal/batches/${id}`);
+        return response.data;
+    },
+
+    createEntry: async (entry: {
+        entryType: JournalEntryType,
+        metricId?: number,
+        value?: number,
+        unit?: string,
+        notes?: string,
+        entryDate: string
+    }): Promise<JournalEntryResponse> => {
+        const response = await apiClient.post<JournalEntryResponse>('/api/journal', entry);
+        return response.data;
+    },
+
+    createBatch: async (batch: {
+        entries: Array<{
+            metricId: number;
+            value: number;
+            unit: string;
+            notes?: string;
+        }>;
+        entryDate: string;
+        notes?: string;
+    }): Promise<JournalBatch> => {
+        const response = await apiClient.post<JournalBatch>('/api/journal/batch', batch);
         return response.data;
     },
 

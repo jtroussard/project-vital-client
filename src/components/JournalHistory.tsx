@@ -1,74 +1,84 @@
 import React from 'react';
-import { DataTable } from 'primereact/datatable';
-import { Column } from 'primereact/column';
 import { Button } from 'primereact/button';
 import { Tag } from 'primereact/tag';
-import { JournalEntry, JournalEntryType } from '../types';
+import { Card } from 'primereact/card';
+import { JournalBatch, JournalEntryResponse, JournalEntryType } from '../types';
 import { format } from 'date-fns';
+import { useNavigate } from 'react-router-dom';
 
 interface JournalHistoryProps {
-    entries: JournalEntry[];
+    batches: JournalBatch[];
     loading: boolean;
     onDelete: (id: number) => void;
 }
 
-export const JournalHistory: React.FC<JournalHistoryProps> = ({ entries, loading, onDelete }) => {
+export const JournalHistory: React.FC<JournalHistoryProps> = ({ batches, loading, onDelete }) => {
+    const navigate = useNavigate();
 
-    const typeTemplate = (rowData: JournalEntry) => {
+    const typeTemplate = (type: JournalEntryType) => {
         let severity: "success" | "info" | "warning" | "danger" | "secondary" | null | undefined = 'info';
-        switch (rowData.entryType) {
+        switch (type) {
             case JournalEntryType.METRIC: severity = 'info'; break;
             case JournalEntryType.MEAL: severity = 'warning'; break;
             case JournalEntryType.NOTE: severity = 'secondary'; break;
         }
-        return <Tag value={rowData.entryType} severity={severity} rounded />;
+        return <Tag value={type} severity={severity} rounded />;
     };
 
-    const dateTemplate = (rowData: JournalEntry) => {
-        return format(new Date(rowData.entryDate), 'MMM dd, yyyy HH:mm');
-    };
-
-    const contentTemplate = (rowData: JournalEntry) => {
-        if (rowData.entryType === JournalEntryType.METRIC) {
-            return (
-                <div className="flex flex-column">
-                    <div className="flex align-items-center gap-2">
-                        <span className="text-sm font-medium text-gray-500">{rowData.metric?.measurementType?.name}:</span>
-                        <span className="font-bold">{rowData.metric?.name}</span>
-                    </div>
-                    <span className="text-xl font-bold text-primary">{rowData.value} <small className="text-sm font-normal text-gray-600">{rowData.metric?.baseUnit}</small></span>
-                    {rowData.notes && <span className="text-sm text-gray-500 mt-1 italic">"{rowData.notes}"</span>}
-                </div>
-            );
-        }
-        return <span className="text-sm text-gray-500">{rowData.notes}</span>;
-    };
-
-    const actionTemplate = (rowData: JournalEntry) => {
+    if (loading) {
         return (
-            <Button
-                icon="pi pi-trash"
-                className="p-button-rounded p-button-danger p-button-text"
-                onClick={() => onDelete(rowData.id)}
-            />
+            <div className="flex justify-content-center p-8">
+                <i className="pi pi-spin pi-spinner text-4xl text-primary"></i>
+            </div>
         );
-    };
+    }
+
+    if (batches.length === 0) {
+        return (
+            <Card className="text-center p-8 shadow-1 border-round-xl">
+                <i className="pi pi-book text-4xl text-400 mb-3"></i>
+                <p className="text-gray-500 m-0">No entries found. Start journaling!</p>
+            </Card>
+        );
+    }
 
     return (
-        <div className="shadow-2 border-round-xl overflow-hidden bg-white">
-            <DataTable
-                value={entries}
-                loading={loading}
-                paginator
-                rows={10}
-                emptyMessage="No entries found. Start journaling!"
-                className="p-datatable-sm"
-            >
-                <Column field="entryDate" header="Date" body={dateTemplate} sortable style={{ minWidth: '10rem' }} />
-                <Column field="entryType" header="Type" body={typeTemplate} style={{ width: '8rem' }} />
-                <Column header="Details" body={contentTemplate} />
-                <Column body={actionTemplate} style={{ width: '4rem' }} />
-            </DataTable>
+        <div className="flex flex-column gap-2">
+            {batches.map((batch) => (
+                <div
+                    key={batch.id}
+                    className="p-3 shadow-1 border-round-xl bg-white border-1 border-100 flex align-items-center justify-content-between hover:surface-100 transition-colors transition-duration-150 cursor-pointer"
+                    onClick={() => navigate(`/journal/batch/${batch.id}`)}
+                >
+                    <div className="flex align-items-center gap-3">
+                        <div className="flex flex-column gap-1">
+                            <span className="text-xs font-bold text-500 uppercase">
+                                {format(new Date(batch.entryDate), 'MMM dd')}
+                            </span>
+                            <span className="text-sm font-bold text-800">
+                                {format(new Date(batch.entryDate), 'HH:mm')}
+                            </span>
+                        </div>
+                        <div className="flex flex-column gap-1">
+                            <span className="text-xs text-600">
+                                {batch.entries.length} {batch.entries.length === 1 ? 'item' : 'items'}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="flex align-items-center gap-3">
+                        {typeTemplate(batch.entries[0]?.entryType || JournalEntryType.NOTE)}
+                        <Button
+                            icon="pi pi-trash"
+                            className="p-button-rounded p-button-danger p-button-text p-button-sm"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onDelete(batch.id);
+                            }}
+                        />
+                    </div>
+                </div>
+            ))}
         </div>
     );
 };

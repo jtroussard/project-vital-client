@@ -10,6 +10,18 @@ export enum MetricDataType {
     BOOLEAN = 'BOOLEAN'
 }
 
+export enum UnitSystem {
+    METRIC = 'METRIC',
+    IMPERIAL = 'IMPERIAL'
+}
+
+export enum QuantityCategory {
+    MASS = 'MASS',
+    LENGTH = 'LENGTH',
+    TEMPERATURE = 'TEMPERATURE',
+    SCALAR = 'SCALAR'
+}
+
 export interface MeasurementType {
     id: number;
     name: string;
@@ -20,6 +32,7 @@ export interface Metric {
     name: string;
     baseUnit: string;
     dataType: MetricDataType;
+    quantityCategory: QuantityCategory;
     measurementType?: MeasurementType;
 }
 
@@ -32,18 +45,36 @@ export interface Meal {
     fat?: number;
 }
 
-export interface JournalEntry {
+export interface JournalEntryResponse {
     id: number;
     userId: string;
+    batchId: number;       // Parent batch identifier
+    metricId: number;
+    metricName: string;
     entryType: JournalEntryType;
-    entryDate: string;
-    value?: number;
-    notes?: string;
-    isActive: boolean;
-    metric?: Metric;
-    meal?: Meal;
+    value: number;         // RAW value stored in DB (always metric)
+    displayValue: number;  // CONVERTED value for the current user's preference
+    displayUnit: string;   // Unit string for display (e.g., "kg", "lb", "mmol/L")
+    notes: string;
+    entryDate: string;     // ISO OffsetDateTime
+    meal?: Meal;           // Meal object if entryType is MEAL
+    isActive?: boolean;
     createdAt?: string;
     updatedAt?: string;
+}
+
+export interface JournalBatch {
+    id: number;
+    userId: string;
+    entryDate: string;
+    notes?: string;
+    entries: JournalEntryResponse[];
+}
+
+export interface UserSettings {
+    userId: string;
+    preferredUnitSystem: UnitSystem;
+    defaultJournalMetricIds: number[];
 }
 
 export interface UserProfile {
@@ -72,4 +103,15 @@ export interface UserProfile {
     };
     createdAt?: string;
     updatedAt?: string;
+}
+export interface Page<T> {
+    content: T[];
+    totalElements: number;
+    totalPages: number;
+    size: number;
+    number: number;
+    numberOfElements: number;
+    first: boolean;
+    last: boolean;
+    empty: boolean;
 }

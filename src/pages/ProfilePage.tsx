@@ -5,9 +5,11 @@ import { Dropdown } from 'primereact/dropdown';
 import { Toast } from 'primereact/toast';
 import { Card } from 'primereact/card';
 import { profileService } from '../services/profileService';
-import { UserProfile } from '../types';
+import { useSettingsStore } from '../store/useSettingsStore';
+import { UserProfile, UnitSystem } from '../types';
 
 export const ProfilePage: React.FC = () => {
+    const { settings, updateUnitSystem } = useSettingsStore();
     const [profile, setProfile] = useState<Partial<UserProfile>>({});
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -32,22 +34,27 @@ export const ProfilePage: React.FC = () => {
     const handleSave = async () => {
         setSaving(true);
         try {
-            const updated = await profileService.updateProfile(profile);
-            setProfile(updated);
-            toast.current?.show({ severity: 'success', summary: 'Success', detail: 'Profile updated successfully' });
+            const updatePromises: Promise<any>[] = [profileService.updateProfile(profile)];
+
+            if (settings?.preferredUnitSystem) {
+                updatePromises.push(updateUnitSystem(settings.preferredUnitSystem));
+            }
+
+            const [updatedProfile] = await Promise.all(updatePromises);
+            setProfile(updatedProfile);
+
+            toast.current?.show({ severity: 'success', summary: 'Success', detail: 'Profile and settings updated' });
         } catch (error) {
-            console.error('Failed to update profile', error);
-            toast.current?.show({ severity: 'error', summary: 'Error', detail: 'Failed to update profile' });
+            console.error('Failed to update profile or settings', error);
+            toast.current?.show({ severity: 'error', summary: 'Error', detail: 'Update failed' });
         } finally {
             setSaving(false);
         }
     };
 
-    const genderOptions = [
-        { label: 'Male', value: 'MALE' },
-        { label: 'Female', value: 'FEMALE' },
-        { label: 'Other', value: 'OTHER' },
-        { label: 'Prefer not to say', value: 'PREFER_NOT_TO_SAY' }
+    const unitSystemOptions = [
+        { label: 'Metric (kg, mmol/L)', value: UnitSystem.METRIC },
+        { label: 'Imperial (lb, mg/dL)', value: UnitSystem.IMPERIAL }
     ];
 
     if (loading) {
@@ -106,29 +113,24 @@ export const ProfilePage: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* Personal Stats Group */}
+                    {/* Measurement Preferences Group */}
                     <div className="flex flex-column gap-4">
-                        <h3 className="text-sm font-bold text-primary uppercase tracking-widest m-0">Personal Details</h3>
+                        <h3 className="text-sm font-bold text-primary uppercase tracking-widest m-0">Measurement Preferences</h3>
 
                         <div className="field flex flex-column gap-2">
-                            <label htmlFor="gender" className="font-medium text-700">Gender</label>
+                            <label htmlFor="unitSystem" className="font-medium text-700">Preferred Unit System</label>
                             <Dropdown
-                                id="gender"
-                                value={profile.gender}
-                                options={genderOptions}
-                                onChange={(e) => setProfile({ ...profile, gender: e.value })}
-                                placeholder="Select Gender"
+                                id="unitSystem"
+                                value={settings?.preferredUnitSystem}
+                                options={unitSystemOptions}
+                                onChange={(e) => {
+                                    if (settings) {
+                                        useSettingsStore.setState({ settings: { ...settings, preferredUnitSystem: e.value } });
+                                    }
+                                }}
+                                placeholder="Select Unit System"
                             />
-                        </div>
-
-                        <div className="field flex flex-column gap-2">
-                            <label htmlFor="status" className="font-medium text-700">Current Status</label>
-                            <InputText
-                                id="status"
-                                value={profile.status || ''}
-                                onChange={(e) => setProfile({ ...profile, status: e.target.value })}
-                                placeholder="e.g. Feeling motivated"
-                            />
+                            <small className="text-gray-500">Choosing Imperial will convert mass metrics like Weight to pounds.</small>
                         </div>
                     </div>
 
