@@ -9,6 +9,7 @@ import { HomePage } from './pages/HomePage';
 import { ProfilePage } from './pages/ProfilePage';
 import { JournalPage } from './pages/JournalPage';
 import { JournalEntryDetailsPage } from './pages/JournalEntryDetailsPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { ProgressSpinner } from 'primereact/progressspinner';
 
 const App: React.FC = () => {
@@ -66,6 +67,10 @@ const App: React.FC = () => {
                     <Route
                         path="/journal/batch/:id"
                         element={isAuthenticated ? <JournalEntryDetailsPage /> : <Navigate to="/" />}
+                    />
+                    <Route
+                        path="/reset-password"
+                        element={<ResetPasswordPage />}
                     />
                     {/* Catch-all */}
                     <Route path="*" element={<Navigate to="/" />} />

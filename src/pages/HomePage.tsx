@@ -5,6 +5,7 @@ import { Calendar, FileText, Target, Plus, List } from 'lucide-react';
 import { Button } from 'primereact/button';
 import { profileService } from '../services/profileService';
 import { journalService } from '../services/journalService';
+import { MetricViteCard } from '../components/MetricViteCard';
 import { UserProfile, JournalEntryResponse } from '../types';
 
 export const HomePage: React.FC = () => {
@@ -82,6 +83,9 @@ export const HomePage: React.FC = () => {
                     disabled={true}
                 />
             </div>
+
+            {/* Metrics Visualization */}
+            <MetricViteCard entries={entries} loading={loading} />
 
             {/* Quick Actions */}
             <div className="bg-blue-50/50 p-6 rounded-2xl border border-blue-100/50">

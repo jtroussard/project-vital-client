@@ -115,3 +115,5 @@ export interface Page<T> {
     last: boolean;
     empty: boolean;
 }
+
+export type TimeRange = '3D' | '1W' | '2W' | '1M' | '1Q' | '6M' | '1Y' | 'ALL';
