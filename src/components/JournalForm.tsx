@@ -5,6 +5,7 @@ import { InputTextarea } from 'primereact/inputtextarea';
 import { Button } from 'primereact/button';
 import { Calendar } from 'primereact/calendar';
 import { Card } from 'primereact/card';
+import { Checkbox } from 'primereact/checkbox';
 import { JournalEntryType, Metric, JournalEntryResponse, MeasurementType, JournalBatch } from '../types';
 import { metricService } from '../services/metricService';
 import { journalService } from '../services/journalService';
@@ -119,6 +120,7 @@ export const JournalForm: React.FC<JournalFormProps> = ({ onSuccess }) => {
     const [entryType, setEntryType] = useState<JournalEntryType>(JournalEntryType.METRIC);
     const [entryDate, setEntryDate] = useState<Date>(new Date());
     const [generalNotes, setGeneralNotes] = useState<string>('');
+    const [saveAsDefault, setSaveAsDefault] = useState(false);
     const [loading, setLoading] = useState(false);
 
     // Multi-metric state
@@ -156,6 +158,33 @@ export const JournalForm: React.FC<JournalFormProps> = ({ onSuccess }) => {
             loadInitialData();
         }
     }, [entryType]);
+
+    // Effect to populate default metrics from settings
+    useEffect(() => {
+        if (
+            entryType === JournalEntryType.METRIC &&
+            allMetrics.length > 0 &&
+            settings?.defaultJournalMetricIds &&
+            settings.defaultJournalMetricIds.length > 0 &&
+            formMetrics.length === 1 &&
+            formMetrics[0].selectedMetric === null
+        ) {
+            const defaults = settings.defaultJournalMetricIds
+                .map(id => allMetrics.find(m => m.id === id))
+                .filter((m): m is Metric => !!m);
+
+            if (defaults.length > 0) {
+                const initialFormMetrics = defaults.map(m => ({
+                    id: Math.random().toString(36).substr(2, 9),
+                    selectedType: m.measurementType || null,
+                    metrics: allMetrics.filter(am => am.measurementType?.id === m.measurementType?.id),
+                    selectedMetric: m,
+                    value: null
+                }));
+                setFormMetrics(initialFormMetrics);
+            }
+        }
+    }, [entryType, allMetrics, settings]);
 
     // Determine which metrics are available for a given row
     const getMetricsForCategory = (typeId: number) => {
@@ -232,19 +261,64 @@ export const JournalForm: React.FC<JournalFormProps> = ({ onSuccess }) => {
             };
 
             const newBatch = await journalService.createBatch(batchPayload);
+
+            // If "Save as default" is checked, update settings
+            if (saveAsDefault && validMetrics.length > 0) {
+                const { updateDefaultMetrics } = useSettingsStore.getState();
+                const metricIds = validMetrics.map(m => m.selectedMetric!.id);
+                await updateDefaultMetrics(metricIds);
+            }
+
             // newBatch.entries[0] just to satisfy the legacy onSuccess return type for now
             // We will need to update JournalPage to handle Batches
             onSuccess(newBatch.entries[0]);
 
             // Reset form fields
-            setFormMetrics([{
-                id: Math.random().toString(36).substr(2, 9),
-                selectedType: null,
-                metrics: [],
-                selectedMetric: null,
-                value: null
-            }]);
+            if (saveAsDefault && validMetrics.length > 0) {
+                // Manually apply the new defaults immediately for a snappier UX
+                const newDefaults = validMetrics.map(m => ({
+                    id: Math.random().toString(36).substr(2, 9),
+                    selectedType: m.selectedMetric!.measurementType || null,
+                    metrics: allMetrics.filter(am => am.measurementType?.id === m.selectedMetric!.measurementType?.id),
+                    selectedMetric: m.selectedMetric,
+                    value: null
+                }));
+                setFormMetrics(newDefaults);
+            } else if (settings?.defaultJournalMetricIds?.length) {
+                // If we didn't save new defaults, try to reload existing ones
+                const defaults = settings.defaultJournalMetricIds
+                    .map(id => allMetrics.find(m => m.id === id))
+                    .filter((m): m is Metric => !!m);
+
+                if (defaults.length > 0) {
+                    setFormMetrics(defaults.map(m => ({
+                        id: Math.random().toString(36).substr(2, 9),
+                        selectedType: m.measurementType || null,
+                        metrics: allMetrics.filter(am => am.measurementType?.id === m.measurementType?.id),
+                        selectedMetric: m,
+                        value: null
+                    })));
+                } else {
+                    setFormMetrics([{
+                        id: Math.random().toString(36).substr(2, 9),
+                        selectedType: null,
+                        metrics: [],
+                        selectedMetric: null,
+                        value: null
+                    }]);
+                }
+            } else {
+                setFormMetrics([{
+                    id: Math.random().toString(36).substr(2, 9),
+                    selectedType: null,
+                    metrics: [],
+                    selectedMetric: null,
+                    value: null
+                }]);
+            }
+
             setGeneralNotes('');
+            setSaveAsDefault(false);
         } catch (error) {
             console.error('Failed to create entry batch', error);
         } finally {
@@ -319,6 +393,19 @@ export const JournalForm: React.FC<JournalFormProps> = ({ onSuccess }) => {
                         placeholder="Add any notes about this entry here..."
                     />
                 </div>
+
+                {entryType === JournalEntryType.METRIC && (
+                    <div className="field-checkbox flex align-items-center gap-2 mt-2">
+                        <Checkbox
+                            inputId="saveAsDefault"
+                            checked={saveAsDefault}
+                            onChange={e => setSaveAsDefault(e.checked || false)}
+                        />
+                        <label htmlFor="saveAsDefault" className="text-sm font-medium text-700">
+                            Set current fields as default for future entries
+                        </label>
+                    </div>
+                )}
 
                 <div className="flex justify-content-end mt-2">
                     <Button

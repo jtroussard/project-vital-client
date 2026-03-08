@@ -4,31 +4,38 @@ import { Button } from 'primereact/button';
 import { Dropdown } from 'primereact/dropdown';
 import { Toast } from 'primereact/toast';
 import { Card } from 'primereact/card';
+import { MultiSelect } from 'primereact/multiselect';
 import { profileService } from '../services/profileService';
+import { metricService } from '../services/metricService';
 import { useSettingsStore } from '../store/useSettingsStore';
-import { UserProfile, UnitSystem } from '../types';
+import { UserProfile, UnitSystem, Metric } from '../types';
 
 export const ProfilePage: React.FC = () => {
-    const { settings, updateUnitSystem } = useSettingsStore();
+    const { settings, updateUnitSystem, updateDefaultMetrics } = useSettingsStore();
     const [profile, setProfile] = useState<Partial<UserProfile>>({});
+    const [allMetrics, setAllMetrics] = useState<Metric[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const toast = useRef<Toast>(null);
 
     useEffect(() => {
-        const fetchProfile = async () => {
+        const fetchData = async () => {
             try {
-                const data = await profileService.getMyProfile();
-                setProfile(data);
+                const [profileData, metricsData] = await Promise.all([
+                    profileService.getMyProfile(),
+                    metricService.getMetrics()
+                ]);
+                setProfile(profileData);
+                setAllMetrics(metricsData);
             } catch (error) {
-                console.error('Failed to fetch profile', error);
-                toast.current?.show({ severity: 'error', summary: 'Error', detail: 'Failed to load profile' });
+                console.error('Failed to fetch profile or metrics', error);
+                toast.current?.show({ severity: 'error', summary: 'Error', detail: 'Failed to load profile data' });
             } finally {
                 setLoading(false);
             }
         };
 
-        fetchProfile();
+        fetchData();
     }, []);
 
     const handleSave = async () => {
@@ -38,6 +45,10 @@ export const ProfilePage: React.FC = () => {
 
             if (settings?.preferredUnitSystem) {
                 updatePromises.push(updateUnitSystem(settings.preferredUnitSystem));
+            }
+
+            if (settings?.defaultJournalMetricIds) {
+                updatePromises.push(updateDefaultMetrics(settings.defaultJournalMetricIds));
             }
 
             const [updatedProfile] = await Promise.all(updatePromises);
@@ -88,7 +99,7 @@ export const ProfilePage: React.FC = () => {
                             <InputText
                                 id="displayName"
                                 value={profile.displayName || ''}
-                                onChange={(e) => setProfile({ ...profile, displayName: e.target.value })}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setProfile({ ...profile, displayName: e.target.value })}
                                 placeholder="How should we call you?"
                             />
                         </div>
@@ -99,7 +110,7 @@ export const ProfilePage: React.FC = () => {
                                 <InputText
                                     id="firstName"
                                     value={profile.firstName || ''}
-                                    onChange={(e) => setProfile({ ...profile, firstName: e.target.value })}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setProfile({ ...profile, firstName: e.target.value })}
                                 />
                             </div>
                             <div className="col-12 md:col-6 field flex flex-column gap-2">
@@ -107,7 +118,7 @@ export const ProfilePage: React.FC = () => {
                                 <InputText
                                     id="lastName"
                                     value={profile.lastName || ''}
-                                    onChange={(e) => setProfile({ ...profile, lastName: e.target.value })}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setProfile({ ...profile, lastName: e.target.value })}
                                 />
                             </div>
                         </div>
@@ -123,7 +134,7 @@ export const ProfilePage: React.FC = () => {
                                 id="unitSystem"
                                 value={settings?.preferredUnitSystem}
                                 options={unitSystemOptions}
-                                onChange={(e) => {
+                                onChange={(e: { value: UnitSystem }) => {
                                     if (settings) {
                                         useSettingsStore.setState({ settings: { ...settings, preferredUnitSystem: e.value } });
                                     }
@@ -131,6 +142,26 @@ export const ProfilePage: React.FC = () => {
                                 placeholder="Select Unit System"
                             />
                             <small className="text-gray-500">Choosing Imperial will convert mass metrics like Weight to pounds.</small>
+                        </div>
+
+                        <div className="field flex flex-column gap-2">
+                            <label htmlFor="defaultMetrics" className="font-medium text-700">Default Journal Metrics</label>
+                            <MultiSelect
+                                id="defaultMetrics"
+                                value={settings?.defaultJournalMetricIds}
+                                options={allMetrics}
+                                optionLabel="name"
+                                optionValue="id"
+                                onChange={(e: { value: number[] }) => {
+                                    if (settings) {
+                                        useSettingsStore.setState({ settings: { ...settings, defaultJournalMetricIds: e.value } });
+                                    }
+                                }}
+                                placeholder="Select Default Metrics"
+                                display="chip"
+                                className="w-full"
+                            />
+                            <small className="text-gray-500">Selected metrics will be pre-filled in your journal entry form.</small>
                         </div>
                     </div>
 
