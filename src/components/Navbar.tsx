@@ -67,15 +67,19 @@ export const Navbar: React.FC = () => {
                     </div>
                     <span className="font-bold text-900 hidden sm:block">VITAL</span>
                 </div>
-                <Menu model={menuItems} popup ref={menu} id="hamburger_menu" />
-                <Button
-                    icon={<LucideMenu size={20} />}
-                    tooltip="Menu"
-                    className="p-button-text p-button-plain p-button-sm ml-1"
-                    onClick={(e) => menu.current?.toggle(e)}
-                    aria-controls="hamburger_menu"
-                    aria-haspopup
-                />
+                {isAuthenticated && (
+                    <>
+                        <Menu model={menuItems} popup ref={menu} id="hamburger_menu" />
+                        <Button
+                            icon={<LucideMenu size={20} />}
+                            tooltip="Menu"
+                            className="p-button-text p-button-plain p-button-sm ml-1"
+                            onClick={(e) => menu.current?.toggle(e)}
+                            aria-controls="hamburger_menu"
+                            aria-haspopup
+                        />
+                    </>
+                )}
             </div>
 
             {/* Center Section: Title */}
