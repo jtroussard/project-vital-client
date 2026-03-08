@@ -8,11 +8,12 @@ import { MultiSelect } from 'primereact/multiselect';
 import { profileService } from '../services/profileService';
 import { metricService } from '../services/metricService';
 import { useSettingsStore } from '../store/useSettingsStore';
-import { UserProfile, UnitSystem, Metric } from '../types';
+import { UserProfile, UnitSystem, Metric, UserSettings } from '../types';
 
 export const ProfilePage: React.FC = () => {
-    const { settings, updateUnitSystem, updateDefaultMetrics } = useSettingsStore();
+    const { settings, updateUnitSystem, updateDefaultMetrics, setSettings: setStoreSettings } = useSettingsStore();
     const [profile, setProfile] = useState<Partial<UserProfile>>({});
+    const [localSettings, setLocalSettings] = useState<Partial<UserSettings>>({});
     const [allMetrics, setAllMetrics] = useState<Metric[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -38,20 +39,27 @@ export const ProfilePage: React.FC = () => {
         fetchData();
     }, []);
 
+    // Sync local settings when global settings finish loading
+    useEffect(() => {
+        if (settings) {
+            setLocalSettings(settings);
+        }
+    }, [settings]);
+
     const handleSave = async () => {
         setSaving(true);
         try {
-            const updatePromises: Promise<any>[] = [profileService.updateProfile(profile)];
+            // Run updates sequentially to avoid race conditions in store state sync
+            const updatedProfile = await profileService.updateProfile(profile);
 
-            if (settings?.preferredUnitSystem) {
-                updatePromises.push(updateUnitSystem(settings.preferredUnitSystem));
+            if (localSettings.preferredUnitSystem) {
+                await updateUnitSystem(localSettings.preferredUnitSystem);
             }
 
-            if (settings?.defaultJournalMetricIds) {
-                updatePromises.push(updateDefaultMetrics(settings.defaultJournalMetricIds));
+            if (localSettings.defaultJournalMetricIds) {
+                await updateDefaultMetrics(localSettings.defaultJournalMetricIds);
             }
 
-            const [updatedProfile] = await Promise.all(updatePromises);
             setProfile(updatedProfile);
 
             toast.current?.show({ severity: 'success', summary: 'Success', detail: 'Profile and settings updated' });
@@ -132,12 +140,10 @@ export const ProfilePage: React.FC = () => {
                             <label htmlFor="unitSystem" className="font-medium text-700">Preferred Unit System</label>
                             <Dropdown
                                 id="unitSystem"
-                                value={settings?.preferredUnitSystem}
+                                value={localSettings.preferredUnitSystem}
                                 options={unitSystemOptions}
                                 onChange={(e: { value: UnitSystem }) => {
-                                    if (settings) {
-                                        useSettingsStore.setState({ settings: { ...settings, preferredUnitSystem: e.value } });
-                                    }
+                                    setLocalSettings({ ...localSettings, preferredUnitSystem: e.value });
                                 }}
                                 placeholder="Select Unit System"
                             />
@@ -148,14 +154,12 @@ export const ProfilePage: React.FC = () => {
                             <label htmlFor="defaultMetrics" className="font-medium text-700">Default Journal Metrics</label>
                             <MultiSelect
                                 id="defaultMetrics"
-                                value={settings?.defaultJournalMetricIds}
+                                value={localSettings.defaultJournalMetricIds}
                                 options={allMetrics}
                                 optionLabel="name"
                                 optionValue="id"
                                 onChange={(e: { value: number[] }) => {
-                                    if (settings) {
-                                        useSettingsStore.setState({ settings: { ...settings, defaultJournalMetricIds: e.value } });
-                                    }
+                                    setLocalSettings({ ...localSettings, defaultJournalMetricIds: e.value });
                                 }}
                                 placeholder="Select Default Metrics"
                                 display="chip"

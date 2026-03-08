@@ -8,11 +8,13 @@ interface SettingsState {
     fetchSettings: () => Promise<void>;
     updateUnitSystem: (system: UnitSystem) => Promise<void>;
     updateDefaultMetrics: (metricIds: number[]) => Promise<void>;
+    setSettings: (settings: UserSettings) => void;
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
     settings: null,
     loading: false,
+    setSettings: (settings: UserSettings) => set({ settings }),
     fetchSettings: async () => {
         set({ loading: true });
         try {
@@ -35,11 +37,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     updateDefaultMetrics: async (metricIds: number[]) => {
         try {
             await settingsService.updateDefaultMetrics(metricIds);
-            // Re-fetch to get updated state (or we could assume the backend returns the full object if we update the service)
-            // Based on UserSettingsController, it returns UserSettings.
-            // Let's check settingsService.ts again.
-            const data = await settingsService.getSettings();
-            set({ settings: data });
+            const current = get().settings;
+            if (current) {
+                set({ settings: { ...current, defaultJournalMetricIds: metricIds } });
+            }
         } catch (error) {
             console.error('Failed to update default metrics', error);
             throw error;
